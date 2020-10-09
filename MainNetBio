@@ -9,55 +9,54 @@ from bokeh.io import output_notebook, show
 from ndlib.viz.bokeh.DiffusionTrend import DiffusionTrend
 from ndlib.viz.bokeh.DiffusionPrevalence import DiffusionPrevalence
 import matplotlib as plot
+import hvplot.networkx as hvnx
 
-multi = MultiPlot()
-# Network topology:
-prob = 2*10/1000
-print(prob)
-G = nx.erdos_renyi_graph(1000, prob)
-av = G.number_of_edges()/G.number_of_nodes()
-print(av)
+# '''
+# # Random graph:
+# av_degree= 10
+# prob = 2*av_degree/1000
+# G = nx.erdos_renyi_graph(1000, prob)
+# av = G.number_of_edges()/G.number_of_nodes()
+# print(av)
+# nx.draw(G)
+# nx.draw(G, pos=nx.spring_layout(G))  # use spring layout
+# '''
 
-nx.draw(G)
-nx.draw(G, pos=nx.spring_layout(G))  # use spring layout
+# LOAD GRAPH: 
+data=nx.read_graphml('budapest_large.graphml')
+shell= hvnx.draw(data)
+shell
+data.remove_nodes_from(list(nx.isolates(data)))
+shell2= hvnx.draw(data)
+shell 
+shell2
+# # Model selection
+#multi = MultiPlot()
+# model = ep.ThresholdModel(G)
+
+# # Model Configuration
+# config = mc.Configuration()
+# config.add_model_parameter('fraction_infected', 0.1)
+
+# # Setting node parameters
+# threshold = 0.15
+# for i in G.nodes():
+#     config.add_node_configuration("threshold", i, threshold)
+
+# model.set_initial_status(config)
+
+# # Simulation execution
+# iterations = model.iteration_bunch(10)
+# trends = model.build_trends(iterations)
 
 
-# Model selection
-model = ep.ThresholdModel(G)
+# viz = DiffusionTrend(model, trends)
+# p = viz.plot(width=400, height=400)
+# multi.add_plot(p)
 
-# Model Configuration
-config = mc.Configuration()
-config.add_model_parameter('fraction_infected', 0.1)
+# viz2 = DiffusionPrevalence(model, trends)
+# p2 = viz2.plot(width=400, height=400)
+# multi.add_plot(p2)
+# show(multi.plot())
 
-# Setting node parameters
-threshold = 0.15
-for i in G.nodes():
-    config.add_node_configuration("threshold", i, threshold)
-
-model.set_initial_status(config)
-
-# Simulation execution
-iterations = model.iteration_bunch(10)
-trends = model.build_trends(iterations)
-
-visualization_config = {
-    'plot_interval': 1,
-    'plot_variable': 'status_1',
-    'variable_limits': {
-        'status_1': [0, 0.8]
-    },
-    'show_plot': True,
-    'plot_output': './animations/model_animation.gif',
-    'plot_title': 'Animated network',
-}
-
-visual = model.visualization (config)
-# 
-viz = DiffusionTrend(model, trends)
-p = viz.plot(width=400, height=400)
-multi.add_plot(p)
-
-viz2 = DiffusionPrevalence(model, trends)
-p2 = viz2.plot(width=400, height=400)
-multi.add_plot(p2)
-show(multi.plot())
+# %%
