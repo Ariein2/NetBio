@@ -203,3 +203,84 @@ plt.show()
 # Show animated plot
 craving_control_model.visualize(iterations)
 # %%
+import networkx as nx
+import igraph 
+from ndlib.models.compartments.NodeStochastic import NodeStochastic
+import numpy as np 
+import ndlib
+import ndlib.models.ModelConfig as mc
+import ndlib.models.epidemics as ep
+from ndlib.viz.bokeh.MultiPlot import MultiPlot
+from bokeh.io import output_notebook, show
+from ndlib.viz.bokeh.DiffusionTrend import DiffusionTrend
+from ndlib.viz.bokeh.DiffusionPrevalence import DiffusionPrevalence
+import ndlib.models.compartments.NodeThreshold as NodeThreshold
+import matplotlib as plot
+import hvplot.networkx as hvnx
+from ndlib.models.ContinuousModel import ContinuousModel
+
+g = nx.erdos_renyi_graph(1000, 0.3)
+
+g.edges
+constants = {
+    'fraction_infected' : 0.01,
+    'threshold' : 0.15
+}
+
+def initial_i (node, graph, status, constants):
+
+    if (node > 500):
+        return 1
+    else: 
+        return 0
+
+def initial_a (node, graph, status, constants):
+    if (node <= 500):
+        return 1
+    else: 
+        return 0
+
+initial_status = {
+        'Inactive': initial_i,
+        'Active': initial_a,
+}
+
+model = ContinuousModel(g)
+
+model.add_status('Inactive')
+model.add_status('Active')
+
+def update (node, graph, status, attributes, constants):
+    av_state = 0
+    for n in graph.neighbors(node):
+        av_state = sum(av_state, status[node]['Active'])
+    neig_score = av_state/len(graph.neighbors[node])
+    if neigh_score >= threshold: 
+        return status[node]['Active'] == 1, status[node]['Inactive'] == 0
+
+c1 = NodeStochastic(1) 
+#c1 = NodeThreshold(0.15, triggering_status= "Active")
+model.add_rule("Inactive", update, c1)
+
+config = mc.Configuration()
+#config.add_model_parameter('fraction_infected', 0.1)
+model.set_initial_status(initial_status, config)
+
+iterations = model.iteration_bunch(10, node_status=True)
+
+
+# Visualization config
+visualization_config = {
+    'plot_interval': 1,
+    'plot_variable': 'Active',
+    'variable_limits': {
+        'Active': [0, 1]
+    },
+    'show_plot': True,
+    'plot_output': './model_animation.gif',
+    'plot_title': 'Animated network',
+}
+
+model.configure_visualization(visualization_config)
+model.visualize(iterations)
+# %%
