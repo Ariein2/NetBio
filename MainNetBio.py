@@ -11,7 +11,10 @@ from ndlib.viz.bokeh.DiffusionTrend import DiffusionTrend
 from ndlib.viz.bokeh.DiffusionPrevalence import DiffusionPrevalence
 import matplotlib as plot
 import hvplot.networkx as hvnx
-
+from itertools import compress 
+import pandas as pd
+import random 
+#%%
 # '''
 # # Random graph:
 # av_degree= 10
@@ -26,12 +29,28 @@ import hvplot.networkx as hvnx
 # LOAD GRAPH: 
 data=nx.read_graphml('budapest_large.graphml')
 shell= hvnx.draw(data)
-shell
 data.remove_nodes_from(list(nx.isolates(data)))
 shell2= hvnx.draw(data)
-shell 
-shell2
-nx.draw(data)
+#shell+shell2
+
+# Find High degree nodes
+data_filtered = data 
+percent_removed = 0.5  
+degree = list(dict(data_filtered.degree).values())
+
+# Select nodes from top degree quartile: 
+quartile = np.quantile(degree, 0.75) 
+keys = list(dict(data_filtered .degree).keys())
+bool_quart = degree >= quartile
+quartile_keys = list(compress(keys, bool_quart))
+remove_nodes = random.sample(quartile_keys, round(percent_removed*len(quartile_keys)))
+edge_remove = list(data_filtered.edges(remove_nodes))
+data_filtered.remove_edges_from(edge_remove)
+
+#data_filtered.remove_nodes_from(remove_nodes)
+draw = hvnx.draw(data_filtered)
+draw 
+# nx.draw(data)
 
 #%% # Model selection
 multi = MultiPlot()
@@ -52,7 +71,6 @@ model.set_initial_status(config)
 iterations = model.iteration_bunch(10)
 trends = model.build_trends(iterations)
 
-
 viz = DiffusionTrend(model, trends)
 p = viz.plot(width=400, height=400)
 multi.add_plot(p)
@@ -61,6 +79,7 @@ viz2 = DiffusionPrevalence(model, trends)
 p2 = viz2.plot(width=400, height=400)
 multi.add_plot(p2)
 show(multi.plot())
+
 
 # %%
 import networkx as nx
