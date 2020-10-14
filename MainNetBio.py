@@ -11,10 +11,16 @@ from ndlib.viz.bokeh.DiffusionTrend import DiffusionTrend
 from ndlib.viz.bokeh.DiffusionPrevalence import DiffusionPrevalence
 import matplotlib as plot
 import hvplot.networkx as hvnx
+import selenium
 from itertools import compress 
 import pandas as pd
 import random 
-#%%
+from ndlib.viz.mpl.TrendComparison import DiffusionTrendComparison
+from py2cytoscape.data.cyrest_client import CyRestClient
+# 'conda install -c conda-forge firefox geckodriver' 
+
+#%% PREPROCESSING 
+
 # '''
 # # Random graph:
 # av_degree= 10
@@ -27,15 +33,36 @@ import random
 # '''
 
 # LOAD GRAPH: 
-data=nx.read_graphml('budapest_large.graphml')
-shell= hvnx.draw(data)
-data.remove_nodes_from(list(nx.isolates(data)))
-shell2= hvnx.draw(data)
-#shell+shell2
+data = nx.read_graphml('budapest_large.graphml')
+len(data.edges())
+main_data = data 
+shell = hvnx.draw(data, node_color = 'lightblue')
+main_data.remove_nodes_from(list(nx.isolates(main_data)))
+len(data.nodes())
+'''
+for node in data.nodes:
+    if (data.nodes[node]["dn_hemisphere"] == "left"):
+        data.nodes[node]["color"] = "ligthblue"
+    else:
+        data.nodes[node]["color"] = "darksalmon"
+'''
+shell2 = hvnx.draw(main_data, node_color = 'lightblue')
+shell2 
+
+#cy = CyRestClient()
+#network = cy.network.create_from_networkx(data)
+
+#layout =shell+shell2
+#layout
+#hvnx.save(layout,'layout.png')
+
+#output_file(shell)
+#%% HIGH DEGREE NODES 
 
 # Find High degree nodes
-data_filtered = data 
-percent_removed = 0.5  
+data_filtered = main_data 
+hvnx.draw(data_filtered)
+nodes_removed =10
 degree = list(dict(data_filtered.degree).values())
 
 # Select nodes from top degree quartile: 
@@ -43,185 +70,107 @@ quartile = np.quantile(degree, 0.75)
 keys = list(dict(data_filtered .degree).keys())
 bool_quart = degree >= quartile
 quartile_keys = list(compress(keys, bool_quart))
-remove_nodes = random.sample(quartile_keys, round(percent_removed*len(quartile_keys)))
-edge_remove = list(data_filtered.edges(remove_nodes))
+selected_nodes = random.sample(quartile_keys,nodes_removed)
+edge_remove = list(data_filtered.edges(selected_nodes))
 data_filtered.remove_edges_from(edge_remove)
 
 #data_filtered.remove_nodes_from(remove_nodes)
 draw = hvnx.draw(data_filtered)
 draw 
+# %% VULNERABLE NODES 
+
+# Find vulnerable nodes
+vulnerable_net = data
+nodes_removed = 10
+degree = list(dict(vulnerable_net.degree).values())
+influence =[]
+for deg in degree: 
+    if (deg == 0) : 
+        influence.append(0) 
+    else :
+        influence.append(1/deg)
+
+#influence = [1 /deg for deg in list(dict(vulneable_net.degree).values())]
+threshold = np.float64(0.15)
+bool_inf = influence >= threshold
+
+# Select nodes from top degree quartile: 
+keys = list(dict(vulnerable_net.degree).keys())
+vulnerable_keys = list(compress(keys, bool_inf))
+selected_nodes = random.sample(vulnerable_keys, nodes_removed)
+edge_remove = list(vulnerable_net.edges(selected_nodes))
+vulnerable_net.remove_edges_from(edge_remove)
+
+#data_filtered.remove_nodes_from(remove_nodes)
+draw = hvnx.draw(vulnerable_net)
+draw 
 # nx.draw(data)
 
+#%% Alzheimer related area
+alzh_net = main_data
+
+node_info= pd.DataFrame(alzh_net.nodes._nodes)
+areas = node_info.loc[['dn_fsname']]
+nodes_removed = 10
+area_bool = []
+for index, text in areas.iteritems() :
+    string= str(text)
+    result = string.find ('Hippocampus')
+    result2 = string.find ('middletemporal')
+    if (result == -1 & result2 == -1):
+        area_bool.append(False)
+    else: 
+        area_bool.append(True)
+
+keys = list(dict(alzh_net.degree).keys())
+alzh_keys = list(compress(keys, area_bool))
+selected_nodes = random.sample(alzh_keys, nodes_removed)
+edge_remove = list(alzh_net.edges(selected_nodes))
+alzh_net.remove_edges_from(edge_remove)
+hvnx.draw(alzh_net)
+
 #%% # Model selection
-multi = MultiPlot()
-model = ep.ThresholdModel(data)
 
-# # Model Configuration
-config = mc.Configuration()
-config.add_model_parameter('fraction_infected', 0.01)
+def model (data, frac_inf, threshold, iter):
+    multi = MultiPlot()
+    model = ep.ThresholdModel(data)
+    # # Model Configuration
+    config = mc.Configuration()
+    config.add_model_parameter('fraction_infected', frac_inf)
 
-# Setting node parameters
-threshold = 0.15
-for i in data.nodes():
-    config.add_node_configuration("threshold", i, threshold)
+    # Setting node parameters
+    for i in data.nodes():
+        config.add_node_configuration("threshold", i, threshold)
 
-model.set_initial_status(config)
+    model.set_initial_status(config)
 
-# Simulation execution
-iterations = model.iteration_bunch(10)
-trends = model.build_trends(iterations)
+    # Simulation execution
+    iterations = model.iteration_bunch(iter)
+    trends = model.build_trends(iterations)
+    return [model, iterations,trends]
 
+[mod_norm, iter_normal, trends_normal] = model(main_data, 0.01, 0.15, 20)
+[mod_degree, iter_degree, trends_degree] = model(data_filtered, 0.01, 0.15, 20)
+[mod_vul, iter_vul, trends_vul] = model(vulnerable_net, 0.01, 0.15, 20)
+[mod_alzh, iter_alzh, trends_alzh] = model(alzh_net, 0.01, 0.15, 20)
+legend = ['baseline','Degree','vulnerable','Alzheimer']
+viz = DiffusionTrendComparison([mod_norm, mod_degree, mod_vul, mod_alzh], 
+[trends_normal, trends_degree, trends_vul, trends_alzh])
+viz.plot("trend_comparison.pdf")
+
+'''
 viz = DiffusionTrend(model, trends)
 p = viz.plot(width=400, height=400)
 multi.add_plot(p)
 
 viz2 = DiffusionPrevalence(model, trends)
 p2 = viz2.plot(width=400, height=400)
-multi.add_plot(p2)
-show(multi.plot())
+show (p)
+#multi.add_plot(p2)
+#show(multi.plot())
+'''
 
-
-# %%
-import networkx as nx
-import random
-import ndlib
-import numpy as np
-import matplotlib.pyplot as plt
-from ndlib.models.compartments.enums.NumericalType import NumericalType
-from ndlib.models.ContinuousModel import ContinuousModel
-from ndlib.models.compartments.NodeStochastic import NodeStochastic
-
-import ndlib.models.ModelConfig as mc
-
-################### MODEL SPECIFICATIONS ###################
-
-constants = {
-    'q': 0.8,
-    'b': 0.5,
-    'd': 0.2,
-    'h': 0.2,
-    'k': 0.25,
-    'S+': 0.5,
-}
-constants['p'] = 2*constants['d']
-
-def initial_v(node, graph, status, constants):
-    return min(1, max(0, status['C']-status['S']-status['E']))
-
-def initial_a(node, graph, status, constants):
-    return constants['q'] * status['V'] + (np.random.poisson(status['lambda'])/7)
-
-initial_status = {
-    'C': 0,
-    'S': constants['S+'],
-    'E': 1,
-    'V': initial_v,
-    'lambda': 0.5,
-    'A': initial_a
-}
-
-def update_C(node, graph, status, attributes, constants):
-    return status[node]['C'] + constants['b'] * status[node]['A'] * min(1, 1-status[node]['C']) - constants['d'] * status[node]['C']
-
-def update_S(node, graph, status, attributes, constants):
-    return status[node]['S'] + constants['p'] * max(0, constants['S+'] - status[node]['S']) - constants['h'] * status[node]['C'] - constants['k'] * status[node]['A']
-
-def update_E(node, graph, status, attributes, constants):
-    # return status[node]['E'] - 0.015 # Grasman calculation
-
-    avg_neighbor_addiction = 0
-    for n in graph.neighbors(node):
-        avg_neighbor_addiction += status[n]['A']
-
-    return max(-1.5, status[node]['E'] - avg_neighbor_addiction / 50) # Custom calculation
-
-def update_V(node, graph, status, attributes, constants):
-    return min(1, max(0, status[node]['C']-status[node]['S']-status[node]['E']))
-
-def update_lambda(node, graph, status, attributes, constants):
-    return status[node]['lambda'] + 0.01
-
-def update_A(node, graph, status, attributes, constants):
-    return constants['q'] * status[node]['V'] + min((np.random.poisson(status[node]['lambda'])/7), constants['q']*(1 - status[node]['V']))
-
-################### MODEL CONFIGURATION ###################
-
-# Network definition
-g = nx.random_geometric_graph(200, 0.125)
-
-# Visualization config
-visualization_config = {
-    'plot_interval': 2,
-    'plot_variable': 'A',
-    'variable_limits': {
-        'A': [0, 0.8],
-        'lambda': [0.5, 1.5]
-    },
-    'show_plot': True,
-    'plot_output': './c_vs_s.gif',
-    'plot_title': 'Self control vs craving simulation',
-}
-
-# Model definition
-craving_control_model = ContinuousModel(g, constants=constants)
-craving_control_model.add_status('C')
-craving_control_model.add_status('S')
-craving_control_model.add_status('E')
-craving_control_model.add_status('V')
-craving_control_model.add_status('lambda')
-craving_control_model.add_status('A')
-
-# Compartments
-condition = NodeStochastic(1)
-
-# Rules
-craving_control_model.add_rule('C', update_C, condition)
-craving_control_model.add_rule('S', update_S, condition)
-craving_control_model.add_rule('E', update_E, condition)
-craving_control_model.add_rule('V', update_V, condition)
-craving_control_model.add_rule('lambda', update_lambda, condition)
-craving_control_model.add_rule('A', update_A, condition)
-
-# Configuration
-config = mc.Configuration()
-craving_control_model.set_initial_status(initial_status, config)
-craving_control_model.configure_visualization(visualization_config)
-
-################### SIMULATION ###################
-
-# Simulation
-iterations = craving_control_model.iteration_bunch(100, node_status=True)
-trends = craving_control_model.build_trends(iterations)
-
-################### VISUALIZATION ###################
-
-# Show the trends of the model
-craving_control_model.plot(trends, len(iterations), delta=True)
-
-# Recreate the plots shown in the paper to verify the implementation
-x = np.arange(0, len(iterations))
-plt.figure()
-
-plt.subplot(221)
-plt.plot(x, trends['means']['E'], label='E')
-plt.plot(x, trends['means']['lambda'], label='lambda')
-plt.legend()
-
-plt.subplot(222)
-plt.plot(x, trends['means']['A'], label='A')
-plt.plot(x, trends['means']['C'], label='C')
-plt.legend()
-
-plt.subplot(223)
-plt.plot(x, trends['means']['S'], label='S')
-plt.plot(x, trends['means']['V'], label='V')
-plt.legend()
-
-plt.show()
-
-# Show animated plot
-craving_control_model.visualize(iterations)
-# %%
+# %% CONTINUOUS CODE ATTEMPT
 import networkx as nx
 import igraph 
 from ndlib.models.compartments.NodeStochastic import NodeStochastic
@@ -236,6 +185,7 @@ from ndlib.viz.bokeh.DiffusionPrevalence import DiffusionPrevalence
 import ndlib.models.compartments.NodeThreshold as NodeThreshold
 import matplotlib as plot
 import hvplot.networkx as hvnx
+
 from ndlib.models.ContinuousModel import ContinuousModel
 
 g = nx.erdos_renyi_graph(1000, 0.3)
@@ -273,7 +223,7 @@ def update (node, graph, status, attributes, constants):
     av_state = 0
     for n in graph.neighbors(node):
         av_state = sum(av_state, status[node]['Active'])
-    neig_score = av_state/len(graph.neighbors[node])
+    neigh_score = av_state/len(graph.neighbors[node])
     if neigh_score >= threshold: 
         return status[node]['Active'] == 1, status[node]['Inactive'] == 0
 
