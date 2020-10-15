@@ -164,29 +164,34 @@ viz.plot("trend_comparison.pdf")
 #plt.plot(trends_normal, trends_degree, trends_vul, trends_alzh)
 half_time = np.round(timesteps/2)
 #%%
-iter_norm_complete={}
-for it in iter_norm: 
-    if (it['iteration'] == 0):
-        iter_norm_complete[it['iteration']] = iter_norm[0]['status']
-        backup = iter_norm_complete[it['iteration']]
-    else :
-        iter_norm_complete[it['iteration']] = backup
-        iter_norm_complete[it['iteration']].update(iter_norm[it['iteration']]['status'])
-        backup = iter_norm_complete[it['iteration']]
-c=1
+def state_graph (iter_norm):
+    iter_complete={}
+    for it in iter_norm: 
+        if (it['iteration'] == 0):
+            iter_complete[it['iteration']] = iter_norm[0]['status']
+        else :
+            iter_complete[it['iteration']] = {**iter_complete[it['iteration']-1], 
+                                                    **iter_norm[it['iteration']]['status']}
+    return iter_complete
+
 def save_status (graph, iteration):
     for node in graph.nodes:
-        graph.nodes[node]['stat0'] = iteration[0]['status'][node]
-        
-        graph.nodes[node]['stat1'] = iteration[10]['status'][node]
-        graph.nodes[node]['stat2'] = iteration[19]['status'][node]
+        graph.nodes[node]['stat0'] = iteration[0][node]
+        graph.nodes[node]['stat1'] = iteration[10][node]
+        graph.nodes[node]['stat2'] = iteration[19][node]
     return graph
 
-graph_normal = save_status (main_net, iter_norm)
-graph_deg = save_status (deg_net, iter_deg)
-graph_vul = save_status (vul_net, iter_vul)
-graph_alzh = save_status (alzh_net, iter_alzh)
-'''
+complete_norm = state_graph (iter_norm)
+complete_deg = state_graph (iter_deg)
+complete_vul = state_graph (iter_vul)
+complete_alzh = state_graph (iter_alzh)
+
+graph_normal = save_status (main_net, complete_norm)
+nx.write_graphml(graph_normal,'normal_test.graphml')
+graph_deg = save_status (deg_net, complete_deg)
+graph_vul = save_status (vul_net, complete_vul)
+graph_alzh = save_status (alzh_net, complete_alzh)
+
 '''
 viz = DiffusionTrend(model, trends)
 p = viz.plot(width=400, height=400)
@@ -197,5 +202,5 @@ p2 = viz2.plot(width=400, height=400)
 show (p)
 #multi.add_plot(p2)
 #show(multi.plot())
-
+'''
 # %%
