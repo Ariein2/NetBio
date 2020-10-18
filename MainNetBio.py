@@ -6,6 +6,9 @@
 # install the development version through their github following the
 # instructions described in the documentation . 
 
+# NOTE: The code contains random selections so every iteration can lead to different 
+# results. 
+
 import networkx as nx
 import numpy as np 
 import ndlib.models.ModelConfig as mc
@@ -125,6 +128,7 @@ alzh_keys = list(compress(keys, area_bool))
 
 # Select a random subset of nodes in the area
 nodes_removed = 10
+
 selected_nodes = random.sample(alzh_keys, nodes_removed)
 edge_remove = list(alzh_net.edges(selected_nodes))
 alzh_net.remove_edges_from(edge_remove)
@@ -268,18 +272,20 @@ plt.ylabel('Proportion of active nodes')
 plt.legend(['Baseline network','Hub nodes','Vulnerable nodes','Alzheimer scenario'])
 plt.savefig('proportionplot.svg')
 # Add information to graphs and export them for visualization
+
 graph_normal = save_status (main_net, complete_norm)
+graph_normal = save_variables (graph_normal, area_bool, 4)
+graph_normal = save_variables (graph_normal, bool_inf, 3)
+graph_normal = save_variables (graph_normal, bool_quart, 2)
 nx.write_graphml(graph_normal,'sim_baseline.graphml')
 
 graph_deg = save_status (deg_net, complete_deg)
-graph_deg = save_variables (graph_deg, bool_quart, 2)
 nx.write_graphml(graph_deg,'sim_high_degree.graphml')
 
 graph_vul = save_status (vul_net, complete_vul)
-graph_vul = save_variables (graph_vul,bool_inf, 3)
 nx.write_graphml(graph_vul,'sim_vulnerable.graphml')
 
 graph_alzh = save_status (alzh_net, complete_alzh)
-graph_alzh = save_variables (graph_alzh, area_bool, 4)
 nx.write_graphml(graph_alzh,'sim_alzheimer.graphml')
+
 #%%
