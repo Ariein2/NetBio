@@ -1,40 +1,51 @@
-# %% THRESHOLD
+# %% IMPORT PACKAGES: 
+# The packages listed must be imported following the instructions 
+# on their respective documentation pages. It is also necessary to 
+# install the extra dependencies they mention, specially for the 
+# NDLIB package. Moreover, for the NDlib package it is necessary to 
+# install the development version through their github following the
+# instructions described in the documentation . 
+
 import networkx as nx
 import numpy as np 
 import ndlib.models.ModelConfig as mc
 import ndlib.models.epidemics as ep
-from bokeh.io import output_notebook, show
+from bokeh.io import show
 from ndlib.viz.bokeh.DiffusionTrend import DiffusionTrend
+import matplotlib.pyplot as plt
 from ndlib.viz.bokeh.DiffusionPrevalence import DiffusionPrevalence
 import matplotlib as plot
-import matplotlib.pyplot as plt
-import hvplot.networkx as hvnx
 import selenium
-from itertools import compress 
+import hvplot.networkx as hvnx
+from itertools import compress
 import pandas as pd
-import random 
-from ndlib.utils import multi_runs
+import random
 from ndlib.viz.mpl.TrendComparison import DiffusionTrendComparison
-
 #%% PREPROCESSING: 
+# Load graphs and remove isolated nodes to only study the main 
+# connected component.
 
-# Load graph: 
+# Load graph 
 raw_net = nx.read_graphml('budapest_large.graphml')
 raw = hvnx.draw(raw_net, node_color = 'lightblue')
 print('Properties raw_net: '+ str(len(raw_net.nodes())) 
       + ' and ' + str(len(raw_net.edges())))
 
-# Remove isolated nodes: 
+# Remove isolated nodes
 main_net = raw_net 
 main_net.remove_nodes_from(list(nx.isolates(main_net)))
 processed = hvnx.draw(main_net, node_color = 'lightblue')
 print('Properties main_net: '+ str(len(main_net.nodes())) 
       +' and '+ str(len(main_net.edges())))
 
+# Visualise networks 
 layout = raw + processed
 layout
 
-#%% HIGH DEGREE NODES 
+#%% SCENARIO 2: Isolate high degree nodes 
+# Isolate 10 high degree nodes. High degree nodes are selected
+# randomly from the set of nodes in the top quartile of the
+# node degree distribution. 
 
 # Identify high degree nodes
 deg_net = main_net
@@ -47,34 +58,36 @@ bool_quart = degree >= quartile
 quartile_keys = list(compress(keys, bool_quart))
 
 # Select a random set of top quartile nodes to isolate
-nodes_removed =10
+nodes_removed = 10
 selected_nodes = random.sample(quartile_keys,nodes_removed)
 edge_remove = list(deg_net.edges(selected_nodes))
 deg_net.remove_edges_from(edge_remove)
 
-# Draw deg_net: 
+# Draw deg_net 
 print('Properties deg_net: '+ str(len(deg_net.nodes())) 
       +' and '+ str(len(deg_net.edges())))
 hvnx.draw(deg_net, node_color = 'lightblue')
 
-
-# %% VULNERABLE NODES 
-
-# Identify influence in nodes (1/degree)
+# %% SCENARIO 3: Isolate vulnerable nodes 
+# Isolate 10 vulnerable nodes in the network. Vulnerable nodes are 
+# nodes which have an influence 1/degree which is smaller than the threshold.
+# These nodes are the most relevant from the dynamical point of view. 
+ 
+# Identify influence in nodes (influence = 1/degree)
 vul_net = main_net
 degree = list(dict(vul_net.degree).values())
 influence = []
 for deg in degree: 
-    if (deg == 0): 
+    if (deg == 0):
         influence.append(0)
-    else :
+    else:
         influence.append(1/deg)
 
 # Identify vulnerable nodes
 threshold = np.float64(0.15)
 bool_inf = influence >= threshold
 
-# Select random subset of vulnerable nodes: 
+# Select random subset of vulnerable nodes 
 nodes_removed = 10
 keys = list(dict(vul_net.degree).keys())
 vulnerable_keys = list(compress(keys, bool_inf))
@@ -82,17 +95,19 @@ selected_nodes = random.sample(vulnerable_keys, nodes_removed)
 edge_remove = list(vul_net.edges(selected_nodes))
 vul_net.remove_edges_from(edge_remove)
 
-# Draw vul_net :
+# Draw vul_net
 print('Properties vul_net: '+ str(len(vul_net.nodes())) 
        +' and '+ str(len(vul_net.edges()))) 
 hvnx.draw(vul_net, node_color = 'lightblue')
 
 
-#%% Alzheimer related area
+#%% SCENARIO 4: Alzheimer related area
+# Isolate 10 nodes which are located in regions related to Alzheimer's 
+# disease. 
 
 #Identify nodes related to areas of interest 
 alzh_net = main_net
-node_info= pd.DataFrame(alzh_net.nodes._nodes)
+node_info = pd.DataFrame(alzh_net.nodes._nodes)
 areas = node_info.loc[['dn_fsname']]
 
 area_bool = []
@@ -116,8 +131,11 @@ alzh_net.remove_edges_from(edge_remove)
 
 #Draw alzh_net
 hvnx.draw(alzh_net, node_color = 'lightblue')
+nx.write_graphml(alzh_net,'alzheimer.graphml')
 
 #%% MODEL AND SIMULATION DEFINITION 
+# Implement threshold model with a threshold parameter of 
+# 0.15 a starting fraction of infected nodes of 0.01 and 
 
 #Function definition 
 def model (net, frac_inf, threshold, iter):
@@ -130,7 +148,7 @@ def model (net, frac_inf, threshold, iter):
     # a node's state to active. 
     # iter: Number of iterations to run from the dynamical process. 
 
-    # Model impolementation 
+    # Model impolementation
     model = ep.ThresholdModel(net)
 
     # Model Configuration: initial conditions
@@ -151,14 +169,17 @@ def model (net, frac_inf, threshold, iter):
 #Parameter definition
 timesteps = 20
 threshold = 0.15
-
+frac_inf = 0.01
 # Run models in the different scenarios
-[mod_norm, iter_norm, trends_normal] = model(main_net, 0.01, 0.15, timesteps)
-[mod_degree, iter_deg, trends_degree] = model(deg_net, 0.01, 0.15, timesteps)
-[mod_vul, iter_vul, trends_vul] = model(vul_net, 0.01, 0.15, timesteps)
-[mod_alzh, iter_alzh, trends_alzh] = model(alzh_net, 0.01, 0.15, timesteps)
+[mod_norm, iter_norm, trends_normal] = model(main_net, frac_inf, threshold, timesteps)
+[mod_degree, iter_deg, trends_degree] = model(deg_net, frac_inf, threshold, timesteps)
+[mod_vul, iter_vul, trends_vul] = model(vul_net, frac_inf, threshold, timesteps)
+[mod_alzh, iter_alzh, trends_alzh] = model(alzh_net, frac_inf, threshold, timesteps)
 
 #%% VISUALIZATION:
+# Prepare networks for visualisation and create overall plot. 
+# Save states on the simulation as variables in the network and also 
+# save the se
 
 #Function definition
 def state_complete (iter_norm):
@@ -166,7 +187,7 @@ def state_complete (iter_norm):
     # at each timestep. Uses as input the iterations otuput from 
     # the model () function. 
 
-    iter_complete={}
+    iter_complete = {}
     for it in iter_norm: 
         if (it['iteration'] == 0):
             iter_complete[it['iteration']] = iter_norm[0]['status']
@@ -177,7 +198,7 @@ def state_complete (iter_norm):
 
 
 def save_status (graph, iteration):
-    # Stores as a graph variable the state (active =1 inactive =0) 
+    # Stores as a graph variable the state (active=1 inactive=0) 
     # of all nodes at 3 different iterations.
     # At the start (stat0), half way through the dynamics (stat10) 
     # and end (stat19).
@@ -200,7 +221,7 @@ def save_variables (graph, boolean, scenario):
     # Alzheimer's disease, assigns 0 otherwise.
 
     for i, node in enumerate(graph.nodes):
-        bin_bool =[]
+        bin_bool = []
 
         if (scenario == 2):
             bin_bool = boolean*1
@@ -245,19 +266,20 @@ plt.xlabel('Iteration')
 plt.xlim([0,19])
 plt.ylabel('Proportion of active nodes')
 plt.legend(['Baseline network','Hub nodes','Vulnerable nodes','Alzheimer scenario'])
-
+plt.savefig('proportionplot.svg')
 # Add information to graphs and export them for visualization
 graph_normal = save_status (main_net, complete_norm)
-nx.write_graphml(graph_normal,'baseline.graphml')
+nx.write_graphml(graph_normal,'sim_baseline.graphml')
 
 graph_deg = save_status (deg_net, complete_deg)
 graph_deg = save_variables (graph_deg, bool_quart, 2)
-nx.write_graphml(graph_deg,'high_degree.graphml')
+nx.write_graphml(graph_deg,'sim_high_degree.graphml')
 
 graph_vul = save_status (vul_net, complete_vul)
 graph_vul = save_variables (graph_vul,bool_inf, 3)
-nx.write_graphml(graph_vul,'vulnerable.graphml')
+nx.write_graphml(graph_vul,'sim_vulnerable.graphml')
 
 graph_alzh = save_status (alzh_net, complete_alzh)
-graph_alzh = save_variables (graph_alzh, area_bool,4)
-nx.write_graphml(graph_alzh,'alzheimer.graphml')
+graph_alzh = save_variables (graph_alzh, area_bool, 4)
+nx.write_graphml(graph_alzh,'sim_alzheimer.graphml')
+#%%
