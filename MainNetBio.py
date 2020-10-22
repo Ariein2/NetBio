@@ -24,11 +24,12 @@ from itertools import compress
 import pandas as pd
 import random
 from ndlib.viz.mpl.TrendComparison import DiffusionTrendComparison
+
 #%% PREPROCESSING: 
 # Load graphs and remove isolated nodes to only study the main 
 # connected component.
 
-# Load graph 
+# LOAD GRAPH FOR MAIN NETWORK (SCENARIO 1)
 raw_net = nx.read_graphml('budapest_large.graphml')
 raw = hvnx.draw(raw_net, node_color = 'lightblue')
 print('Properties raw_net: '+ str(len(raw_net.nodes())) 
@@ -41,6 +42,18 @@ processed = hvnx.draw(main_net, node_color = 'lightblue')
 print('Properties main_net: '+ str(len(main_net.nodes())) 
       +' and '+ str(len(main_net.edges())))
 
+# LOAD NETWORK SCENARIO 2
+deg_net = nx.read_graphml('budapest_large.graphml')
+deg_net.remove_nodes_from(list(nx.isolates(deg_net)))
+
+# LOAD NETWORK SCENARIO 3 
+vul_net = nx.read_graphml('budapest_large.graphml')
+vul_net.remove_nodes_from(list(nx.isolates(vul_net)))
+
+# LOAD NETWORK SCENARIO 4 
+alzh_net = nx.read_graphml('budapest_large.graphml')
+alzh_net.remove_nodes_from(list(nx.isolates(alzh_net)))
+
 # Visualise networks 
 layout = raw + processed
 layout
@@ -51,7 +64,7 @@ layout
 # node degree distribution. 
 
 # Identify high degree nodes
-deg_net = main_net
+
 degree = list(dict(deg_net.degree).values())
 
 # Identify top quartile degree nodes: 
@@ -77,7 +90,6 @@ hvnx.draw(deg_net, node_color = 'lightblue')
 # These nodes are the most relevant from the dynamical point of view. 
  
 # Identify influence in nodes (influence = 1/degree)
-vul_net = main_net
 degree = list(dict(vul_net.degree).values())
 influence = []
 for deg in degree: 
@@ -109,7 +121,6 @@ hvnx.draw(vul_net, node_color = 'lightblue')
 # disease. 
 
 #Identify nodes related to areas of interest 
-alzh_net = main_net
 node_info = pd.DataFrame(alzh_net.nodes._nodes)
 areas = node_info.loc[['dn_fsname']]
 
@@ -134,8 +145,9 @@ edge_remove = list(alzh_net.edges(selected_nodes))
 alzh_net.remove_edges_from(edge_remove)
 
 #Draw alzh_net
+print('Properties alzh_net: '+ str(len(alzh_net.nodes())) 
+      +' and '+ str(len(alzh_net.edges())))
 hvnx.draw(alzh_net, node_color = 'lightblue')
-nx.write_graphml(alzh_net,'alzheimer.graphml')
 
 #%% MODEL AND SIMULATION DEFINITION 
 # Implement threshold model with a threshold parameter of 
